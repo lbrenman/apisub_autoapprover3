@@ -1,0 +1,325 @@
+{
+	"schemaVersion": "4",
+	"info": {
+		"name": "webhookhandler - post /amplifycentralwebhookhandler"
+	},
+	"parameter": {
+		"properties": {
+			"params": {
+				"type": "object",
+				"description": "The parameters from the endpoint."
+			},
+			"request": {
+				"type": "object",
+				"description": "The HTTP request."
+			},
+			"config": {
+				"type": "object",
+				"description": "The service's configuration"
+			},
+			"env": {
+				"type": "object",
+				"description": "The host OS environment"
+			}
+		},
+		"additionalProperties": false,
+		"required": [
+			"request",
+			"config",
+			"env",
+			"params"
+		]
+	},
+	"start": "condition.1",
+	"nodes": {
+		"http.1": {
+			"type": "nodehandler://axway-flow/http",
+			"name": "Set HTTP Response Not An API Subscription Request",
+			"method": "setresponse",
+			"parameters": [
+				{
+					"name": "status",
+					"type": "number",
+					"value": "200",
+					"metaName": "Status",
+					"metaDescription": "The HTTP status code"
+				},
+				{
+					"name": "body",
+					"type": "string",
+					"value": "\"Not an API Subscription Request; Nothing to do!!\"",
+					"metaName": "Body",
+					"metaDescription": "The response payload"
+				}
+			],
+			"outputs": {
+				"next": {
+					"context": "$.response",
+					"routes": [],
+					"metaName": "Next"
+				}
+			},
+			"metaMethod": "Set HTTP Response"
+		},
+		"condition.1": {
+			"type": "nodehandler://axway-flow/condition",
+			"name": "Check Type is Subscription Request",
+			"method": "equals",
+			"parameters": [
+				{
+					"name": "source",
+					"type": "jsonpath",
+					"value": "$.request.body.type",
+					"metaName": "Source",
+					"metaDescription": "The input to test."
+				},
+				{
+					"name": "value",
+					"type": "string",
+					"value": "\"SubscriptionUpdatedEvent\"",
+					"metaName": "Value",
+					"metaDescription": "The value to test input against."
+				}
+			],
+			"outputs": {
+				"true": {
+					"routes": [
+						"condition.2"
+					],
+					"context": "$.equals",
+					"metaName": "True"
+				},
+				"false": {
+					"routes": [
+						"http.1"
+					],
+					"context": "$.equals",
+					"metaName": "False"
+				}
+			},
+			"metaMethod": "Equals"
+		},
+		"condition.2": {
+			"type": "nodehandler://axway-flow/condition",
+			"name": "Check Current State is Requested",
+			"method": "equals",
+			"parameters": [
+				{
+					"name": "source",
+					"type": "jsonpath",
+					"value": "$.request.body.payload.subscription.currentState",
+					"metaName": "Source",
+					"metaDescription": "The input to test."
+				},
+				{
+					"name": "value",
+					"type": "string",
+					"value": "\"REQUESTED\"",
+					"metaName": "Value",
+					"metaDescription": "The value to test input against."
+				}
+			],
+			"outputs": {
+				"true": {
+					"routes": [
+						"javascript.1"
+					],
+					"context": "$.equals",
+					"metaName": "True"
+				},
+				"false": {
+					"routes": [
+						"http.1"
+					],
+					"context": "$.equals",
+					"metaName": "False"
+				}
+			},
+			"metaMethod": "Equals"
+		},
+		"javascript.1": {
+			"type": "nodehandler://@axway/api-builder-plugin-fn-javascript/javascript",
+			"name": "PrepareApproveSubscription",
+			"method": "Execute",
+			"parameters": [
+				{
+					"name": "data",
+					"type": "jsonpath",
+					"value": "$",
+					"metaName": "Data",
+					"metaDescription": "The value to apply as the `data` argument of the JavaScript code. For objects and arrays, `data` is passed by reference."
+				},
+				{
+					"name": "code",
+					"type": "string",
+					"value": "\"let body = {\\n\\tdescription: 'Approved via Custom Subsription Flow',\\n\\tstate: 'APPROVED'\\n  };\\n  \\n  return {body};\"",
+					"metaName": "Code",
+					"metaDescription": "A JavaScript function body. Supports `await` and returning promises. `data` is the value of the Data parameter. `logger` is the API Builder logger. See the docs for more info: https://docs.axway.com/bundle/api-builder/page/docs/developer_guide/flows/flow_nodes/javascript_flow_node/index.html"
+				}
+			],
+			"outputs": {
+				"next": {
+					"context": "$.prepareapprovesubscriptionresult",
+					"routes": [
+						"ucswagger.1"
+					],
+					"metaName": "Next"
+				},
+				"error": {
+					"context": "$.prepareapprovesubscriptionerror",
+					"routes": [],
+					"metaName": "Error"
+				}
+			},
+			"metaMethod": "Execute"
+		},
+		"ucswagger.1": {
+			"type": "nodehandler://@axway/api-builder-plugin-fn-swagger/ucswagger",
+			"name": "Approve Subscription",
+			"method": "POST_catalogItemSubscriptions",
+			"parameters": [
+				{
+					"name": "catalogItemId",
+					"type": "jsonpath",
+					"value": "$.request.body.payload.catalogItem.id",
+					"metaName": "catalogItemId"
+				},
+				{
+					"name": "subscriptionId",
+					"type": "jsonpath",
+					"value": "$.request.body.payload.subscription.id",
+					"metaName": "subscriptionId"
+				},
+				{
+					"name": "body",
+					"type": "jsonpath",
+					"value": "$.prepareapprovesubscriptionresult.body",
+					"metaName": "body",
+					"metaDescription": "The request body.  Please refer to the info icon for schema."
+				}
+			],
+			"outputs": {
+				"201": {
+					"routes": [
+						"http.2"
+					],
+					"context": "$.approvesubscriptionrequestresponse",
+					"metaName": "201"
+				},
+				"400": {
+					"routes": [
+						"http.3"
+					],
+					"context": "$.approvesubscriptionrequestresponse",
+					"metaName": "400"
+				},
+				"401": {
+					"routes": [
+						"http.3"
+					],
+					"context": "$.approvesubscriptionrequestresponse",
+					"metaName": "401"
+				},
+				"403": {
+					"routes": [
+						"http.3"
+					],
+					"context": "$.approvesubscriptionrequestresponse",
+					"metaName": "403"
+				},
+				"404": {
+					"routes": [
+						"http.3"
+					],
+					"context": "$.approvesubscriptionrequestresponse",
+					"metaName": "404"
+				},
+				"500": {
+					"routes": [
+						"http.3"
+					],
+					"context": "$.approvesubscriptionrequestresponse",
+					"metaName": "500"
+				},
+				"error": {
+					"routes": [
+						"http.3"
+					],
+					"context": "$.approvesubscriptionrequestresponse",
+					"metaName": "Error"
+				},
+				"default": {
+					"routes": [
+						"http.3"
+					],
+					"context": "$.approvesubscriptionrequestresponse",
+					"metaName": "Default"
+				}
+			},
+			"authorizations": [
+				{
+					"name": "OAuth2ClientCredentials",
+					"type": "credential",
+					"value": "Amplify Unified Catalog APIs OAuth2ClientCredentials_clientCredentials"
+				}
+			],
+			"metaMethod": "POST_catalogItemSubscriptions"
+		},
+		"http.2": {
+			"type": "nodehandler://axway-flow/http",
+			"name": "Set HTTP Response Success",
+			"method": "setresponse",
+			"parameters": [
+				{
+					"name": "status",
+					"type": "number",
+					"value": "201",
+					"metaName": "Status",
+					"metaDescription": "The HTTP status code"
+				},
+				{
+					"name": "body",
+					"type": "jsonpath",
+					"value": "$.approvesubscriptionrequestresponse.data"
+				}
+			],
+			"outputs": {
+				"next": {
+					"context": "$.response",
+					"routes": [],
+					"metaName": "Next"
+				}
+			},
+			"metaMethod": "Set HTTP Response"
+		},
+		"http.3": {
+			"type": "nodehandler://axway-flow/http",
+			"name": "Set HTTP Response Error",
+			"method": "setresponse",
+			"parameters": [
+				{
+					"name": "status",
+					"type": "number",
+					"value": "400",
+					"metaName": "Status",
+					"metaDescription": "The HTTP status code"
+				},
+				{
+					"name": "body",
+					"type": "jsonpath",
+					"value": "$.approvesubscriptionrequestresponse.data",
+					"metaName": "Body",
+					"metaDescription": "The response payload"
+				}
+			],
+			"outputs": {
+				"next": {
+					"context": "$.response",
+					"routes": [],
+					"metaName": "Next"
+				}
+			},
+			"metaMethod": "Set HTTP Response"
+		}
+	}
+}
